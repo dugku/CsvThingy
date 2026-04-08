@@ -1,24 +1,26 @@
 from csv_reader import CSV_Read
+from revised import NewReader
 def main():
-	menu()
+	reader = NewReader("Titanic-Dataset.csv")
+	menu(reader)
 
-def menu():
-	print("Please select a action to perform on the csv file:")
-	print("1. Print CSV")
-	print("2. Print Numerical Statistics")
-	print("3. Print Categorial Statistics")
-	choice = int(input())
-	reader = CSV_Read("adult.csv")
-	if choice == 1:
-		reader.print_csv()
-	if choice == 2:
-		reader.numerical_stats()
-	if choice == 3:
-		reader.categorical_stats()
-	if choice == 4:
-		reader.get_IQR()
-	if choice == 5:
-		reader.confidence_interval()
-	menu()
+def menu(newReader: NewReader):
+	while True:
+		print("Please select an action to perform on the csv file:")
+		print("1. Print CSV")
+		print("2. Print Column Types")
+		print("3. Standardize Data")	
+		choice = int(input())	
+		if choice == 1:
+			newReader.print_csv()
+		if choice == 2:
+			newReader.column_types()
+		if choice == 3:
+		    newReader.standardize_data()
+		if choice == 4:
+			newReader.desc_stats() #for both numeric and categorical
+		if choice == 5:
+			newReader._null_report()
+
 if __name__ == '__main__':
 	main()
