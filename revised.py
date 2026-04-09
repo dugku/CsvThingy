@@ -13,6 +13,9 @@ class NewReader():
     def __init__(self, path : str):
         self.path: str  = path
         self.data: pd.DataFrame = pd.DataFrame()
+        self.corr_matrix : Optional[pd.DataFrame] = None
+        self.skew: Optional[pd.Series[Any]] = None
+        self.kurt: Optional[pd.Series[Any]] = None
         self.load_csv()
 
     def load_csv(self):
@@ -34,19 +37,27 @@ class NewReader():
         self._regularize_strings()
         self._convert_bool()
 
-
-    def desc_stats(self):
+    def get_col_types(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         cat_col = self.data.select_dtypes(include=["object", "category"])
         numerical_cols = self.data.select_dtypes(include=[np.number])
+        return cat_col, numerical_cols
+
+    def desc_stats(self):
+        cat_col, numerical_cols = self.get_col_types()
+
         report_null = null_report(self.data)
         report_cat = categorical_report(cat_col)
         report_num = numerical_report(numerical_cols)
-        cor_matrix = correlation(self.data)
-        skew, kurt = skewness_kurtosis(self.data)
+        self.corr_matrix = correlation(self.data)
+        self.skew, self.kurt = skewness_kurtosis(self.data)
 
-        self.print_reports(report_cat)
-        self.print_reports(report_num)
-        self.print_nulls(report_null)
+        pprint.pprint(self.corr_matrix)
+        pprint.pprint(self.skew)
+        pprint.pprint(self.kurt)
+
+        #self.print_reports(report_cat)
+        #self.print_reports(report_num)
+        #self.print_nulls(report_null)
 
         #self.write_simple_report(report_cat, report_num, report_null) will figure this out later bleh.
 
@@ -208,3 +219,23 @@ def skewness_kurtosis(df: pd.DataFrame) -> tuple[pd.Series[Any], pd.Series[Any]]
     kur = numerical_cols.kurtosis()
 
     return skewness, kur
+
+def check_uniqueness(df: pd.DataFrame, threshold: float = 0.90):
+    """
+    If there is a lot of unqiueness like if every value is unique then that column is most
+    likely garbage and we need to remove it from any analysis.
+    """
+    cols_to_drop = []
+
+    for col in df.columns:
+        non_null_count = df[col].notna().sum()
+        if non_null_count == 0:
+            continue
+
+        unique_count = df[col].nunique(dropna=True)
+        unique_ratio = unique_count / non_null_count
+
+        if unique_ratio >= threshold:
+            cols_to_drop.append(col)
+
+    return df.drop(columns=cols_to_drop)

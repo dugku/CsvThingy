@@ -1,5 +1,6 @@
 from csv_reader import CSV_Read
-from revised import NewReader
+from revised import NewReader, check_uniqueness, correlation
+from plotter import Plot
 def main():
 	reader = NewReader("Titanic-Dataset.csv")
 	menu(reader)
@@ -21,6 +22,16 @@ def menu(newReader: NewReader):
 			newReader.desc_stats() #for both numeric and categorical
 		if choice == 5:
 			newReader._null_report()
-
+		if choice == 6:
+			cat_col, num_col = newReader.get_col_types()
+			cat_col = check_uniqueness(cat_col)
+			num_col = check_uniqueness(num_col)
+			corr = correlation(newReader.data)
+			plot = Plot(cat_col, num_col, corr)
+			plot.histogram()
+			plot.bar_graph()
+			plot.heatmap_correlation()
 if __name__ == '__main__':
 	main()
+
+#What is the total of the dkjs algo. algorithms class some eom date.
