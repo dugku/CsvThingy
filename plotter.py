@@ -5,6 +5,14 @@ from typing import Optional
 import math
 import seaborn as sns
 
+"""
+TODO:
+Box plots
+Tidy up some of the code to be more configureable
+Figure have the dataset name.?
+Return the figure paths
+"""
+
 class Plot():
     """
     Argh Money blah blah
@@ -13,8 +21,8 @@ class Plot():
         self.cat_data = data_c
         self.num_data = data_n
         self.cor_matrix: pd.DataFrame = cor_matrix
-        self.n_col: int = 3
-        self.n_rows: int = 3
+        self.n_col: int = 5
+        self.n_rows: int = 5
 
     def histogram(self, path: str = "histogram.png") -> None:
         numeric_cols = list(self.num_data.columns)
@@ -73,9 +81,11 @@ class Plot():
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
-    def heatmap_correlation(self, path:str = "heatmap.png"):
-        sns.heatmap(self.cor_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
-        plt.savefig(path, dpi=300, bbox_inches='tight')
-
+    def heatmap_correlation(self, path: str = "heatmap.png"):
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(self.cor_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1, ax=ax)
+        fig.tight_layout()
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
     def pair_plot(self):
         pass
