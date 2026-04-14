@@ -1,6 +1,6 @@
 from csv_reader import CSV_Read
 from revised import NewReader, check_uniqueness, correlation
-from plotter import Plot
+from plotter import Plot, Palette, PASTEL_PALETTE, DARK_PALETTE
 
 """
 TODO:
@@ -9,7 +9,7 @@ The report should be exported as a HTML but right now need to get the other stuf
 """
 
 def main():
-	reader = NewReader("Titanic-Dataset.csv")
+	reader = NewReader("School_Year_2022-2023_Statewide_Accountability_Ratings.csv")
 	menu(reader)
 
 def menu(newReader: NewReader):
@@ -30,10 +30,12 @@ def menu(newReader: NewReader):
 			cat_col = check_uniqueness(cat_col)
 			num_col = check_uniqueness(num_col)
 			corr = correlation(newReader.data)
-			plot = Plot(cat_col, num_col, corr)
+			plot = Plot(cat_col, num_col, corr, palette=DARK_PALETTE)
 			plot.histogram()
 			plot.bar_graph()
 			plot.heatmap_correlation()
+			plot.missing_values_vis()
+			plot.box_plot()
 if __name__ == '__main__':
 	main()
 

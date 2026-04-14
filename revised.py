@@ -16,11 +16,11 @@ TODO fix:
 """
 TODO add:
 Outlier detection: Most likely will do IQR, maybe will implement isolation forest, or different method (IQR Method done)
-More visual missing values
-Duplicate row detection
-Maybe automatically transform if a column is extremely skewed
+More visual missing values (Did now need to format that shit)
+Duplicate row detection ()
+Maybe automatically transform if a column is extremely skewed or not(?)
 Cluster Analysis -- just to see if there are any natural groupding with out any advanced data maniplutation
-Since some dataset will have extremely high dimensionally PCA or something will be good to have.
+Since some dataset(s) will have extremely high dimensionally PCA or something will be good to have.
 """
 
 
@@ -70,32 +70,33 @@ class NewReader():
         report_cat = categorical_report(cat_col)
         report_num = numerical_report(numerical_cols)
         report_outliers = outlier_report(numerical_cols)
+        dups = report_dups(self.data)
 
         self.corr_matrix = correlation(self.data)
         self.skew, self.kurt = skewness_kurtosis(self.data)
 
-        print("\n=== CATEGORICAL REPORT ===")
-        self.print_reports(report_cat)
-
-        print("\n=== NUMERICAL REPORT ===")
-        self.print_reports(report_num)
-
-        print("\n=== NULL REPORT ===")
-        self.print_nulls(report_null)
-
-        print("\n=== CORRELATION MATRIX ===")
-        print(self.corr_matrix)
-
-        print("\n=== SKEWNESS ===")
-        print(self.skew)
-
-        print("\n=== KURTOSIS ===")
-        print(self.kurt)
-
-        print("\n=== OUTLIERS ===")
+        #print("\n=== CATEGORICAL REPORT ===")
+        #self.print_reports(report_cat)
+#
+        #print("\n=== NUMERICAL REPORT ===")
+        #self.print_reports(report_num)
+#
+        #print("\n=== NULL REPORT ===")
+        #self.print_nulls(report_null)
+#
+        #print("\n=== CORRELATION MATRIX ===")
+        #print(self.corr_matrix)
+#
+        #print("\n=== SKEWNESS ===")
+        #print(self.skew)
+#
+        #print("\n=== KURTOSIS ===")
+        #print(self.kurt)
+#
+        #print("\n=== OUTLIERS ===")
         #self.print_reports(outlier_report)
 
-        self.write_simple_report(report_cat, report_num, report_null, report_outliers)
+        self.write_simple_report(report_cat, report_num, report_null, report_outliers, dups)
 
     def print_csv(self):
         pprint.pprint(self.data)
@@ -154,7 +155,7 @@ class NewReader():
                 print(f"{key}:")
                 print(value)
 
-    def write_simple_report(self,report_cat: Dict[str, Dict[str, Any]],report_num: Dict[str, Dict[str, Any]],report_null: Dict[str, Dict[str, Any]],report_outliers: Dict[str, Dict[str, Any]],filename: str = "report.txt") -> None:
+    def write_simple_report(self,report_cat: Dict[str, Dict[str, Any]],report_num: Dict[str, Dict[str, Any]],report_null: Dict[str, Dict[str, Any]],report_outliers: Dict[str, Dict[str, Any]],dups: Dict[str, Any], filename: str = "report.txt") -> None:
             with open(filename, "w", encoding="utf-8") as f:
                 f.write("=== CATEGORICAL STATISTICS ===\n")
                 for col, stats in report_cat.items():
@@ -182,6 +183,11 @@ class NewReader():
                     f.write(f"\nColumn: {col}\n")
                     for key, value in stats.items():
                         f.write(f"{key}: {value}\n")
+                
+                f.write("\n=== DUPLICATE REPORT ===\n")
+                for c, num in dups.items():
+                    f.write(f'\n{c}: {num}')
+
 
 
 def null_report(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
@@ -302,4 +308,10 @@ def outlier_report(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
             "outlier_pct": round(len(outliers) / df[col].notna().sum() * 100, 2)
         }
 
+    return report
+
+def report_dups(df : pd.DataFrame) -> Dict[str, Any]:
+    report= {}
+    thing = df.duplicated().sum()
+    report["Dupes"] = {thing}
     return report
