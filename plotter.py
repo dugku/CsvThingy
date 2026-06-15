@@ -69,6 +69,7 @@ class Plot():
         self.cor_matrix: pd.DataFrame = cor_matrix
         self.n_col: int = 5
         self.n_rows: int = 5
+        self.out_path = "./plots/"
         self._apply_palette()
 
     def _apply_palette(self) -> None:
@@ -143,7 +144,7 @@ class Plot():
         self._style_ax(ax)
 
         fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight",
+        fig.savefig(self.out_path + path, dpi=150, bbox_inches="tight",
                     facecolor=self.palette.background)
         plt.close(fig)
         return path
@@ -173,14 +174,15 @@ class Plot():
 
         fig.suptitle("Numerical Feature Distributions", fontsize=14)
         fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+        fig.savefig(self.out_path + path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
     def bar_graph(self, path: str = "barplots.png"):
         category_col = list(self.cat_data.columns)
 
         if not category_col:
-            raise ValueError("No numeric columns available to plot.")
+            print("There are no categorical columns available to plot!")
+            return
 
         n_plots = len(category_col)
         n_col = 3
@@ -203,14 +205,23 @@ class Plot():
 
         fig.suptitle("Categorical Feature Counts", fontsize=14)
         fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+        fig.savefig(self.out_path + path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
     def heatmap_correlation(self, path: str = "heatmap.png"):
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(self.cor_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1, ax=ax)
+        fig, ax = plt.subplots(figsize=(10, 8), facecolor=self.palette.background)
+        sns.heatmap(
+            self.cor_matrix,
+            annot=True,
+            cmap=self.palette.heatmap,
+            vmin=-1,
+            vmax=1,
+            ax=ax
+        )
+        self._style_ax(ax)
         fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+        fig.savefig(self.out_path + path, dpi=150, bbox_inches="tight",
+                    facecolor=self.palette.background)
         plt.close(fig)
 
     def pair_plot(self):
@@ -259,6 +270,64 @@ class Plot():
         self._hide_unused(axes, len(numeric_cols))
         fig.suptitle("Numerical Feature Distributions (Box Plots)", fontsize=14, color=self.palette.text)
         fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=self.palette.background)
+        fig.savefig(self.out_path + path, dpi=150, bbox_inches="tight", facecolor=self.palette.background)
         plt.close(fig)
+        return path
+    
+    def time_series_plotting(self, date_series: pd.Series, target: pd.Series, path: str = "time_series.png", time_frame: str = "W") -> str:
+        if len(date_series) != len(target):
+            raise ValueError("date_series and target must be the same length.")
+
+        df = pd.DataFrame({
+            "date": date_series,
+            "target": target
+        }).copy()
+
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["target"] = pd.to_numeric(df["target"], errors="coerce")
+        df = df.dropna(subset=["date", "target"])
+
+        if df.empty:
+            raise ValueError("No valid date/target pairs available to plot.")
+
+        # Weekly aggregation
+        agg = (
+            df.set_index("date")
+              .sort_index()
+              .resample(time_frame)["target"]
+              .mean()
+              .dropna()
+              .reset_index()
+        )
+
+        if agg.empty:
+            raise ValueError("No data available after weekly aggregation.")
+
+        xlabel = str(date_series.name) if date_series.name is not None else "Date"
+        ylabel = str(target.name) if target.name is not None else "Value"
+        title = f"Weekly {ylabel} Over Time"
+
+        fig, ax = plt.subplots(
+            figsize=(12, 5),
+            facecolor=self.palette.background
+        )
+
+        ax.plot(agg["date"], agg["target"], linewidth=2)
+        ax.set_title(title, color=self.palette.text)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        ax.grid(True, alpha=0.25)
+        self._style_ax(ax)
+        fig.autofmt_xdate()
+
+        fig.tight_layout()
+        fig.savefig(
+            self.out_path + path,
+            dpi=150,
+            bbox_inches="tight",
+            facecolor=self.palette.background
+        )
+        plt.close(fig)
+
         return path

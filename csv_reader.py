@@ -3,6 +3,12 @@ import numpy as np
 from statistics import median, fmean, stdev, pvariance
 import math
 import scipy.stats as st
+import csv
+
+from typing import Optional, Dict, List
+
+NULL_SENTINELS = {"", "nan", "n/a", "na", "null", "none", "?", "-", "missing"}
+
 class CSV_Read():
 	'''
 	This will be cool once I am done but not yet
@@ -12,21 +18,29 @@ class CSV_Read():
 		self.data = []
 		self.numeric_col = []
 		self.categorical_cols = []
+		self.fields = []
 		self.read_lines()
 
 	def read_lines(self):
-		with open(self.path, "r+") as f:
-			line = f.readlines()
-			for l in line:
-				j = l.rstrip()
-				if not j:
-					continue
-				splitted = j.split(",")
-				self.data.append(splitted)
+		with open(self.path, "r") as f:
+			reader = csv.reader(f) 
+			self.fields = next(reader)
+			for row in reader:
+				line = self.cleanse_lines(row)
+				self.data.append(line)
 		self.thingy_columns()
+
+	def cleanse_lines(self, line):
+		fin_line = []
+		for i in line:
+			temp = i.lower()
+			val = check_empty(temp)
+			fin_line.append(val)
+		return fin_line
 
 	def thingy_columns(self):
 		row1 = self.data[1]
+		print(row1)
 		for i, x in enumerate(row1):
 			if is_numeric(x):
 				self.numeric_col.append(i)
@@ -126,10 +140,7 @@ def get_portion(all_values):
 	return return_dict
 
 def check_empty(val):
-	if val == "":
-		return None
-	else:
-		return val
+	return None if val.strip().lower() in NULL_SENTINELS else val
 
 def percentile_IQR(vals):
 	return np.percentile(vals, [25, 50, 75])
@@ -147,8 +158,13 @@ def variance_cols(vals):
 	return np.var(vals)
 
 def is_numeric(entry):
-	try:
-		float(entry)
-		return True
-	except ValueError:
-		return False
+    if entry is None:
+        return False
+    if entry.strip().lower() in NULL_SENTINELS:
+        return False  
+    try:
+        float(entry)
+        return True
+    except (ValueError, AttributeError):
+        return False
+

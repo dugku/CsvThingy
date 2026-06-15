@@ -4,15 +4,16 @@ import numpy as np
 import pprint
 import re
 from pathlib import Path
+from dateutil.parser import parse as dateutil_parse
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from scipy import stats
 
 """
 TODO fix:
---Fix some of the builit in method stuff (Done)
 --Fix some stuff in _convert date (Maybe)
---Make sure the path is valid in __init__ oops (done)
 --parser percent return None but num_report doesn't handle if apparently (Not done but will be one the list for a while)
 """
-
+#This is now getting messy, tech debt is real.
 """
 TODO add:
 Outlier detection: Most likely will do IQR, maybe will implement isolation forest, or different method (IQR Method done)
@@ -24,7 +25,9 @@ Since some dataset(s) will have extremely high dimensionally PCA or something wi
 """
 
 
-DATE_KEYWORDS = {"date", "dt", "time", "day", "month", "year", "created", "updated"}
+DATE_KEYWORDS_EXACT = {"date", "dt", "created", "updated"}
+DATE_KEYWORDS_RISKY = {"day", "month", "year", "time"}
+DATE_KEYWORD_BLOCKLIST = {"by", "for", "rate", "zone", "experience", "limit", "type"}
 BOOL_TRUE  = {"true", "yes", "y", "1", "on"}
 BOOL_FALSE = {"false", "no", "n", "0", "off"}
 class NewReader():
@@ -74,53 +77,58 @@ class NewReader():
 
         self.corr_matrix = correlation(self.data)
         self.skew, self.kurt = skewness_kurtosis(self.data)
-
-        #print("\n=== CATEGORICAL REPORT ===")
-        #self.print_reports(report_cat)
-#
-        #print("\n=== NUMERICAL REPORT ===")
-        #self.print_reports(report_num)
-#
-        #print("\n=== NULL REPORT ===")
-        #self.print_nulls(report_null)
-#
-        #print("\n=== CORRELATION MATRIX ===")
-        #print(self.corr_matrix)
-#
-        #print("\n=== SKEWNESS ===")
-        #print(self.skew)
-#
-        #print("\n=== KURTOSIS ===")
-        #print(self.kurt)
-#
-        #print("\n=== OUTLIERS ===")
-        #self.print_reports(outlier_report)
-
-        self.write_simple_report(report_cat, report_num, report_null, report_outliers, dups)
-
+        
+        self.write_html_report(
+            report_cat=report_cat,
+            report_num=report_num,
+            report_null=report_null,
+            report_outliers=report_outliers,
+            dups=dups,
+            filename="./Reports/report.html",
+            template_dir="/Users/uggh/Desktop/CsvThingy/templates",
+            template_name="report_temp.html",
+        )
     def print_csv(self):
         pprint.pprint(self.data)
+    
+    def _is_date_column_name(self, col: str) -> bool:
+        tokens = set(re.split(r"[_\s\-]+", col.lower()))
+        if tokens & DATE_KEYWORD_BLOCKLIST:
+            return False
+        if tokens & DATE_KEYWORDS_EXACT:
+            return True
+        if len(tokens & DATE_KEYWORDS_RISKY) >= 2:
+            return True
+        return False
+    
+    def _looks_like_date(self, val: str) -> bool:
+        try:
+            dateutil_parse(val, fuzzy=False)
+            return True
+        except (ValueError, OverflowError):
+            return False
 
     def _convert_date(self):
-        pattern = r"^(?:(?:(0[13578]|1[02])([-./])(0[1-9]|[12][0-9]|3[01])\2)|(?:(0[469]|11)([-./])(0[1-9]|[12][0-9]|30)\5)|(?:(02)([-./])(0[1-9]|1[0-9]|2[0-8])\8))\d{4}$" #This is not good but we have ai now days so it's fine
         for col in self.data.columns:
             sample = self.data[col].dropna().astype(str)
             if sample.empty:
                 continue
 
-            name_match = any(kw in col.lower() for kw in DATE_KEYWORDS)
-            pattern_match = sample.str.match(pattern).mean() > 0.8
+            name_match = self._is_date_column_name(col)
+            pattern_match = sample.apply(self._looks_like_date).mean() > 0.8
 
             if name_match or pattern_match:
-                parsed = pd.to_datetime(self.data[col], errors="coerce", format="mixed")
+                parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
                 if parsed.notna().mean() > 0.8:
-                    self.data[col] = parsed
-
+                    self.data[col] = pd.to_datetime(self.data[col], errors="coerce", format="mixed")
+     
     def _percents(self):
         for col in self.data.columns:
             sample = self.data[col].dropna().astype(str)
             if sample.str.contains("%").any():
-                self.data[col] = self.data[col].apply(parse_percent)
+                converted = self.data[col].apply(parse_percent)
+                if converted.notna().sum() >= self.data[col].notna().sum() * 0.8:
+                    self.data[col] = pd.to_numeric(converted, errors="coerce")
 
     def _convert_dollars(self):
         pattern = r"^\$[\d,]+(\.\d+)?$"
@@ -134,14 +142,14 @@ class NewReader():
             self.data[col] = self.data[col].str.upper()
 
     def _convert_bool(self):
+        bool_map = {**{k: True for k in BOOL_TRUE}, **{k: False for k in BOOL_FALSE}}
         for col in self.data.columns:
             normalized = self.data[col].astype(str).str.strip().str.lower()
             non_null_values = set(normalized[self.data[col].notna()].unique())
 
             if non_null_values and non_null_values.issubset(BOOL_TRUE | BOOL_FALSE):
-                self.data[col] = normalized.map(
-                    lambda x: True if x in BOOL_TRUE else False if x in BOOL_FALSE else np.nan
-                )
+    
+                self.data[col] = normalized.map(bool_map).where(self.data[col].notna())
     
     def print_nulls(self, report) -> None:
         for _, thing in report.items():
@@ -155,46 +163,80 @@ class NewReader():
                 print(f"{key}:")
                 print(value)
 
-    def write_simple_report(self,report_cat: Dict[str, Dict[str, Any]],report_num: Dict[str, Dict[str, Any]],report_null: Dict[str, Dict[str, Any]],report_outliers: Dict[str, Dict[str, Any]],dups: Dict[str, Any], filename: str = "report.txt") -> None:
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write("=== CATEGORICAL STATISTICS ===\n")
-                for col, stats in report_cat.items():
-                    f.write(f"\nColumn: {col}\n")
-                    for key, value in stats.items():
-                        f.write(f"{key}:\n")
-                        if isinstance(value, pd.Series):
-                            f.write(value.head(5).to_string())
-                        else:
-                            f.write(str(value))
-                        f.write("\n")
+    def write_html_report(self, report_cat: Dict[str, Dict[str, Any]], report_num: Dict[str, Dict[str, Any]], report_null: Dict[str, Dict[str, Any]], report_outliers: Dict[str, Dict[str, Any]], dups: Dict[str, Any], 
+        filename: str = "./Reports/report.html", 
+        template_dir: str = "/Users/uggh/Desktop/CsvThingy/templates",
+        template_name: str = "report_temp.html",
+    ) -> None:
+        categorical_data = {
+            col: {k: _make_json_safe(v) for k, v in stats.items()}
+            for col, stats in report_cat.items()
+        }
 
-                f.write("\n=== NUMERICAL STATISTICS ===\n")
-                for col, stats in report_num.items():
-                    f.write(f"\nColumn: {col}\n")
-                    for key, value in stats.items():
-                        f.write(f"{key}: {value}\n")
+        numerical_data = {
+            col: {k: _make_json_safe(v) for k, v in stats.items()}
+            for col, stats in report_num.items()
+        }
 
-                f.write("\n=== NULL REPORT ===\n")
-                for col, stats in report_null.items():
-                    f.write(f"{col}: {stats['null_count']} null(s)\n")
+        null_data = {
+            col: {k: _make_json_safe(v) for k, v in stats.items()}
+            for col, stats in report_null.items()
+        }
 
-                f.write("\n=== OUTLIERS ===\n")
-                for col, stats in report_outliers.items():
-                    f.write(f"\nColumn: {col}\n")
-                    for key, value in stats.items():
-                        f.write(f"{key}: {value}\n")
-                
-                f.write("\n=== DUPLICATE REPORT ===\n")
-                for c, num in dups.items():
-                    f.write(f'\n{c}: {num}')
+        outlier_data = {
+            col: {k: _make_json_safe(v) for k, v in stats.items()}
+            for col, stats in report_outliers.items()
+        }
 
+        duplicate_data = {k: _make_json_safe(v) for k, v in dups.items()}
 
+        corr_matrix = (
+            self.corr_matrix.round(3).to_dict()
+            if self.corr_matrix is not None and not self.corr_matrix.empty
+            else None
+        )
+
+        skew_data = (
+            {k: _make_json_safe(v) for k, v in self.skew.round(3).to_dict().items()}
+            if self.skew is not None and not self.skew.empty
+            else None
+        )
+
+        kurt_data = (
+            {k: _make_json_safe(v) for k, v in self.kurt.round(3).to_dict().items()}
+            if self.kurt is not None and not self.kurt.empty
+            else None
+        )
+
+        env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=select_autoescape(["html", "xml"]),
+        )
+
+        template = env.get_template(template_name)
+
+        html = template.render(
+            report_title="Data Analysis Report",
+            categorical_data=categorical_data,
+            numerical_data=numerical_data,
+            null_data=null_data,
+            outlier_data=outlier_data,
+            duplicate_data=duplicate_data,
+            corr_matrix=corr_matrix,
+            skew_data=skew_data,
+            kurt_data=kurt_data,
+        )
+
+        Path(filename).write_text(html, encoding="utf-8")
 
 def null_report(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     report = {}
     for col in df.columns:
         report[col] = {
-            "null_count": int(df[col].isna().sum())
+            "null_count": int(df[col].isna().sum()),
+            "null_percent": (int(df[col].isna().sum()) / len(df[col])) * 100,
+            "non_null": int(df[col].count()),
+            "all_null": df[col].isna().all(),
         }
     return report
 
@@ -211,6 +253,14 @@ def numerical_report(df : pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         Q1 = df[col].quantile(0.25)
         Q3 = df[col].quantile(0.75)
         IQR = Q3 - Q1
+        Q05 = df[col].quantile(0.05)
+        Q50 = df[col].quantile(0.50)
+        Q95 = df[col].quantile(0.95)
+        df_range = max_col - min_col
+        zero_count = (df[col] == 0).sum()
+        negative_numbers = (df[col] < 0).sum()
+        coeff_var = std_col / mean_col
+        mad = stats.median_abs_deviation(df[col], scale=1.0)
 
         report[col] = {
             "mean" : mean_col ,
@@ -218,7 +268,17 @@ def numerical_report(df : pd.DataFrame) -> Dict[str, Dict[str, Any]]:
             "std": std_col,
             "min": min_col,
             "max": max_col,
-            "IQR": IQR
+            "IQR": IQR,
+            "Q1" : Q1,
+            "Q3": Q3,
+            "Q05": Q05,
+            "Q50": Q50,
+            "Q95": Q95,
+            "range": df_range,
+            "zero_count": zero_count,
+            "negative_numbers": negative_numbers,
+            "coeff_var": coeff_var,
+            "mad": mad
         }
     return report
 
@@ -229,13 +289,16 @@ def categorical_report(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         max_value = counts.max()
         min_value = counts.min()
         length = len(df[col])
-
+        normal_counts = df[col].value_counts(normalize=True) 
         report[col] = {
-            "counts": counts,
+            "counts": counts.head(n=10),
             "max": max_value,
             "min": min_value,
-            "length": length
-        }
+            "length": length,
+            "top_value": counts.idxmax(),
+            "top_percent": normal_counts.head(n=7),
+            "rare_values": normal_counts[normal_counts <= 0.025].head(n=7).index.tolist()
+        } 
     return report
 
 def parse_percent(val: str) -> float | None:
@@ -310,8 +373,31 @@ def outlier_report(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
     return report
 
-def report_dups(df : pd.DataFrame) -> Dict[str, Any]:
-    report= {}
-    thing = df.duplicated().sum()
-    report["Dupes"] = {thing}
+def report_dups(df: pd.DataFrame) -> Dict[str, Any]:
+    report = {}
+    report["Dupes"] = int(df.duplicated().sum()) 
     return report
+
+def _make_json_safe(value):
+    if isinstance(value, pd.Series):
+        return {str(k): _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, pd.Index):
+        return [_make_json_safe(v) for v in value.tolist()]
+    if isinstance(value, np.ndarray):
+        return [_make_json_safe(v) for v in value.tolist()]
+    if isinstance(value, (list, tuple, set)):
+        return [_make_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        if pd.isna(value):
+            return None
+        return float(value)
+    if isinstance(value, (np.bool_,)):
+        return bool(value)
+    if pd.isna(value):
+        return None
+
+    return value

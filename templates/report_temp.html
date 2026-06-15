@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report_title }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2rem;
+            background: #f7f7f7;
+            color: #222;
+        }
+
+        h1, h2, h3 {
+            color: #111827;
+        }
+
+        .section {
+            background: white;
+            padding: 1.25rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .column-block {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-left: 4px solid #2563eb;
+            background: #f9fbff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.75rem;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 0.6rem;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #eef2ff;
+        }
+
+        ul {
+            margin-top: 0.5rem;
+        }
+
+        .small {
+            color: #666;
+            font-size: 0.92rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ report_title }}</h1>
+
+    <div class="section">
+    <h2>Categorical Statistics</h2>
+    {% for col, stats in categorical_data.items() %}
+    <div class="column-block">
+        <h3>{{ col }}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, value in stats.items() %}
+                <tr>
+                    <td>{{ key }}</td>
+                    <td>
+                        {% if value is mapping %}
+                            <ul>
+                                {% for subkey, subvalue in value.items() %}
+                                    <li><strong>{{ subkey }}</strong>: {{ subvalue }}</li>
+                                {% endfor %}
+                            </ul>
+
+                        {% elif value is sequence and value is not string %}
+                            {% if value|length > 0 and value[0] is mapping and 'label' in value[0] and 'value' in value[0] %}
+                                <ul>
+                                    {% for item in value %}
+                                        <li><strong>{{ item.label }}</strong>: {{ item.value }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <ul>
+                                    {% for item in value %}
+                                        <li>{{ item }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+
+                        {% else %}
+                            {{ value }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+</div>
+
+    <div class="section">
+        <h2>Numerical Statistics</h2>
+        {% for col, stats in numerical_data.items() %}
+        <div class="column-block">
+            <h3>{{ col }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in stats.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2>Null Report</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Column</th>
+                    <th>Null Count</th>
+                    <th>Null Percent</th>
+                    <th>Non Null Count</th>
+                    <th> All Null </th>
+                </tr>
+            </thead>
+            <tbody> 
+                {% for col, stats in null_data.items() %}
+                <tr>
+                    <td>{{ col }}</td>
+                    <td>{{ stats.null_count }}</td>
+                    <td>{{ stats.null_percent }}</td>
+                    <td>{{ stats.non_null }}</td>
+                    <td>{{ stats.all_null }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Outlier Report</h2>
+        {% for col, stats in outlier_data.items() %}
+        <div class="column-block">
+            <h3>{{ col }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in stats.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2>Duplicate Report</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, value in duplicate_data.items() %}
+                <tr>
+                    <td>{{ key }}</td>
+                    <td>{{ value }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if skew_data %}
+    <div class="section">
+        <h2>Skewness</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Column</th>
+                    <th>Skewness</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for col, value in skew_data.items() %}
+                <tr>
+                    <td>{{ col }}</td>
+                    <td>{{ value }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if kurt_data %}
+    <div class="section">
+        <h2>Kurtosis</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Column</th>
+                    <th>Kurtosis</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for col, value in kurt_data.items() %}
+                <tr>
+                    <td>{{ col }}</td>
+                    <td>{{ value }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if corr_matrix %}
+    <div class="section">
+        <h2>Correlation Matrix</h2>
+        <div class="small">This is text-only for now. A heatmap is better, but that comes later.</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Column</th>
+                    {% for col in corr_matrix.keys() %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row_name, row_values in corr_matrix.items() %}
+                <tr>
+                    <td><strong>{{ row_name }}</strong></td>
+                    {% for col in corr_matrix.keys() %}
+                    <td>{{ row_values[col] }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</body>
+</html>
